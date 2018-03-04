@@ -1,5 +1,0 @@
-name: demo
-dependencies:
-  vector_math: any
-  dart_ammo_js:
-    path: ../dart_ammo_js
