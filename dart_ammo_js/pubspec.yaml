@@ -1,0 +1,3 @@
+name: dart_ammo_js
+dependencies: 
+  js: any
