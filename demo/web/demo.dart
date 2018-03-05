@@ -80,22 +80,26 @@ class Demo {
   //   );
   // }
 
-  void _addSphere({ double x = null, double y = null, double z = null }) {
+  void _addSphere({ 
+    double x = null, double y = null, double z = null,
+    double xVel = 0.0, double yVel = 0.0, double zVel = 0.0
+  }) {
     const double sphereMass = 1.0;
     var sphereShape = new SphereShape(_sphereModel.radius);
     var startTransform = new Transform();
     startTransform.setIdentity();
     var localInertia = new ammo.Vector3(0.0, 0.0, 0.0);
     sphereShape.calculateLocalInertia(sphereMass, localInertia);
-    const placementDistance = 20.0;
+    const placementDistance = 10.0;
     var xSphere = x ?? _x + cos(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
-    var ySphere = y ?? _y - sin(_xRot) * placementDistance;
+    var ySphere = (y ?? _y - sin(_xRot) * placementDistance) + _sphereModel.radius;
     var zSphere = z ?? _z + sin(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
     startTransform.setOrigin(new ammo.Vector3(xSphere, ySphere, zSphere));
     var motionState = new DefaultMotionState(startTransform);
     var rigidBodyInfo = new RigidBodyConstructionInfo(sphereMass, motionState, sphereShape, localInertia);
     var rigidBody = new RigidBody(rigidBodyInfo);
     rigidBody.setSleepingThresholds(0.0, 0.0);
+    rigidBody.setLinearVelocity(new ammo.Vector3(xVel, yVel, zVel));
     _dynamicsWorld.addRigidBody(rigidBody);
     _gameObjects.add(new GameObject(_sphereModel.model, rigidBody));
   }
@@ -391,7 +395,12 @@ class Demo {
     _gameContext.correctCanvasProportions();
     await _initialiseResources();
     _gameContext.canvas.onMouseDown.listen((ev) => _gameContext.canvas.requestPointerLock());
-    window.onMouseUp.listen((ev) =>  _addSphere());
+    window.onMouseUp.listen((ev) {
+      var xVel = cos(_yRot - PI / 2.0) * cos(_xRot);
+      var yVel = sin(_xRot);
+      var zVel = sin(_yRot - PI / 2.0) * cos(_xRot);
+      _addSphere(xVel: xVel*10.0, yVel: -yVel*10.0, zVel: zVel*10.0);
+    });
     window.onResize.listen((ev) => _gameContext.correctCanvasProportions());
     window.requestAnimationFrame(await _process);
   }

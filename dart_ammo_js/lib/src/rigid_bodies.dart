@@ -14,5 +14,9 @@ abstract class CollisionObject {
 class RigidBody extends CollisionObject {
   external RigidBody(RigidBodyConstructionInfo constructionInfo);
   external MotionState getMotionState();
+  external Vector3 getLinearVelocity();
+  external Vector3 getAngularVelocity();
   external void setSleepingThresholds(double linear, double angular);
+  external void setLinearVelocity(Vector3 linearFactor);
+  external void setAngularVelocity(Vector3 angularFactor);
 }
