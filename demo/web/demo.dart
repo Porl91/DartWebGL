@@ -32,17 +32,11 @@ class Demo {
   static const double _chunkWidth = 100.0;
   static const double _chunkDepth = 100.0;
 
-  double _x = 0.0, _y = 0.0, _z = 0.0;
-  double _xv = 0.0, _yv = 0.0, _zv = 0.0;
-  double _xa = 0.0, _ya = 0.0, _za = 0.0;
   double _xRot = 0.0;
   double _yRot = PI / 2.0;
-  bool _jumping = false;
 
-  static const double maxWalkAcceleration = 0.2;
   final Map<String, bool> _keyStates = {};
   final List<_MouseMovement> _mouseBuffer = [];
-  static const double _moveSpeed = 15.5;
   static const double _rotateSpeed = 0.2;
   num _lastUpdate = 0;
 
@@ -52,6 +46,7 @@ class Demo {
   SequentialImpulseConstraintSolver _solver;
   DiscreteDynamicsWorld _dynamicsWorld;
   final List<GameObject> _gameObjects = [];
+  GameObject _player;
 
   Demo(this._gameContext) : _noise = new SimplexNoise(new Random(3));//new DateTime.now().millisecondsSinceEpoch));
 
@@ -62,28 +57,31 @@ class Demo {
     _solver = new SequentialImpulseConstraintSolver();
     _dynamicsWorld = new DiscreteDynamicsWorld(_dispatcher, _overlappingPairCache, _solver, _collisionConfiguration);
 
-    _dynamicsWorld.setGravity(new ammo.Vector3(0.0, -0.1, 0.0));
+    _dynamicsWorld.setGravity(new ammo.Vector3(0.0, -0.2, 0.0));
+    _addBox(40.0, 40.0, 40.0, 2.0, 2.0, 2.0);
+    // _addSphere(x: 10.0, y: 10.0, z: 10.0);
+    _player = _gameObjects.first;
   }
 
-  // void _addBox() {
-  //   var boxShape = new BoxShape(new ammo.Vector3(10000.0, 1.0, 10000.0));
-  //   // boxShape.setMargin(0.05);
-  //   var transform = new ammo.Transform();
-  //   transform.setOrigin(new ammo.Vector3(0.0, 0.0, 0.0));
-  //   var motionState = new DefaultMotionState(transform);
-  //   var constructionInfo = new RigidBodyConstructionInfo(0.0, motionState, boxShape, new ammo.Vector3(0.0, 0.0, 0.0));
-  //   var rigidBody = new RigidBody(constructionInfo);
-  //   rigidBody.setSleepingThresholds(0.0, 0.0);
-  //   _dynamicsWorld.addRigidBody(rigidBody);
-  //   _gameObjects.add(
-  //     new GameObject(null, rigidBody)
-  //   );
-  // }
+  void _addBox(double x, double y, double z, double width, double height, double depth) {
+    const double boxMass = 1.0;
+    var boxShape = new BoxShape(new ammo.Vector3(width, height, depth));
+    var transform = new ammo.Transform();
+    transform.setIdentity();
+    transform.setOrigin(new ammo.Vector3(x, y, z));
+    var motionState = new DefaultMotionState(transform);
+    var constructionInfo = new RigidBodyConstructionInfo(boxMass, motionState, boxShape, new ammo.Vector3(0.0, 0.0, 0.0));
+    var rigidBody = new RigidBody(constructionInfo);
+    rigidBody.setSleepingThresholds(0.0, 0.0);
+    _dynamicsWorld.addRigidBody(rigidBody);
+    _gameObjects.add(new GameObject(null, rigidBody));
+  }
 
   void _addSphere({ 
     double x = null, double y = null, double z = null,
     double xVel = 0.0, double yVel = 0.0, double zVel = 0.0
   }) {
+    var playerPosition = _player == null ? new ammo.Vector3(0.0, 0.0, 0.0) : _getPositionForRigidBody(_player.rigidBody);
     const double sphereMass = 1.0;
     var sphereShape = new SphereShape(_sphereModel.radius);
     var startTransform = new Transform();
@@ -91,9 +89,9 @@ class Demo {
     var localInertia = new ammo.Vector3(0.0, 0.0, 0.0);
     sphereShape.calculateLocalInertia(sphereMass, localInertia);
     const placementDistance = 10.0;
-    var xSphere = x ?? _x + cos(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
-    var ySphere = (y ?? _y - sin(_xRot) * placementDistance) + _sphereModel.radius;
-    var zSphere = z ?? _z + sin(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
+    var xSphere = x ?? playerPosition.x() + cos(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
+    var ySphere = (y ?? playerPosition.y() - sin(_xRot) * placementDistance) + _sphereModel.radius;
+    var zSphere = z ?? playerPosition.z() + sin(_yRot - PI / 2.0) * cos(_xRot) * placementDistance;
     startTransform.setOrigin(new ammo.Vector3(xSphere, ySphere, zSphere));
     var motionState = new DefaultMotionState(startTransform);
     var rigidBodyInfo = new RigidBodyConstructionInfo(sphereMass, motionState, sphereShape, localInertia);
@@ -128,10 +126,21 @@ class Demo {
     _gameContext.gl.bindBuffer(RenderingContext.ELEMENT_ARRAY_BUFFER, chunk.model.indexBuffer);
     _gameContext.gl.useProgram(_programInfo.program);
 
+    var modelTransform = new Transform();
+    var motionState = _player.rigidBody.getMotionState();
+    motionState.getWorldTransform(modelTransform);
+    var position = modelTransform.getOrigin();
+    var rotation = modelTransform.getRotation();
+  
+    var modelMatrix = new Matrix4.compose(
+        new vec.Vector3(0.0, 0.0, 0.0),
+        new vec.Quaternion(rotation.x(), rotation.y(), rotation.z(), rotation.w()),
+        new vec.Vector3(1.0, 1.0, 1.0));
     var modelViewMatrix = new Matrix4.identity()
       ..rotateX(_xRot)
       ..rotateY(_yRot)
-      ..translate(-_x, -2.0 - _y, -_z);
+      ..translate(-position.x(), -position.y(), -position.z())
+      ..multiply(modelMatrix);
 
     // TODO: Set the normals matrix based on the model orientation
     var normalsMatrix = new Matrix4.identity()..transpose();
@@ -159,7 +168,7 @@ class Demo {
       _renderChunk(chunk);
     }
 
-    for (var obj in _gameObjects.where((obj) => obj.model != null)) {
+    for (var obj in _gameObjects.where((obj) => obj != _player && obj.model != null)) {
       _renderSphere(obj);
     }
   }
@@ -179,17 +188,20 @@ class Demo {
     var modelTransform = new Transform();
     var motionState = gameObject.rigidBody.getMotionState();
     motionState.getWorldTransform(modelTransform);
-    var position = modelTransform.getOrigin();
-    var rotation = modelTransform.getRotation();
+    var spherePosition = modelTransform.getOrigin();
+    var sphereRotation = modelTransform.getRotation();
+    var playerPosition = _getPositionForRigidBody(_player.rigidBody);
 
     var modelMatrix = new Matrix4.compose(
         new vec.Vector3(0.0, 0.0, 0.0),
-        new vec.Quaternion(rotation.x(), rotation.y(), rotation.z(), rotation.w()),
+        new vec.Quaternion(sphereRotation.x(), sphereRotation.y(), sphereRotation.z(), sphereRotation.w()),
         new vec.Vector3(1.0, 1.0, 1.0));
     var modelViewMatrix = new Matrix4.identity()
       ..rotateX(_xRot)
       ..rotateY(_yRot)
-      ..translate(-_x + position.x(), -2.0 - _y + position.y(), -_z + position.z())
+      ..translate(-playerPosition.x() + spherePosition.x(), 
+        -playerPosition.y() + spherePosition.y(), 
+        -playerPosition.z() + spherePosition.z())
       ..multiply(modelMatrix);
 
     var normalsMatrix = modelMatrix..invert()..transpose();
@@ -201,9 +213,16 @@ class Demo {
     _gameContext.gl.drawElements(RenderingContext.TRIANGLES, _sphereModel.model.indices.length, RenderingContext.UNSIGNED_SHORT, 0);
   }
 
+  static ammo.Vector3 _getPositionForRigidBody(RigidBody rigidBody) {
+    var worldTrans = new Transform(); 
+    rigidBody.getMotionState().getWorldTransform(worldTrans);
+    return worldTrans.getOrigin();
+  }
+
   Future _generateNewChunkIfRequired() async {
-    var xChunk = _x ~/ _chunkWidth * _chunkWidth;
-    var zChunk = _z ~/ _chunkDepth * _chunkDepth;
+    var position = _getPositionForRigidBody(_player.rigidBody);
+    var xChunk = position.x() ~/ _chunkWidth * _chunkWidth;
+    var zChunk = position.z() ~/ _chunkDepth * _chunkDepth;
     if (xChunk.isNegative || zChunk.isNegative)
       return;
     var key = generateCantor(xChunk, zChunk);
@@ -259,47 +278,26 @@ class Demo {
 
   Future _update(num delta) async {
     await _generateNewChunkIfRequired();
-    _ya -= 0.0005;
-    _xv += _xa;
-    _yv += _ya;
-    _zv += _za;
-    _x += _xv;
-    _y += _yv;
-    _z += _zv;
-    _xv *= 0.5;
-    _zv *= 0.5;
-    _xa *= 0.5;
-    _za *= 0.5;
-    if (_y < 0) {
-      _y = 0.0;
-      _xv = 0.0;
-      _yv = 0.0;
-      _zv = 0.0;
-      _xa = 0.0;
-      _ya = 0.0;
-      _za = 0.0;
-      _jumping = false;
-    }
-    if (_keyStates[' '] && !_jumping) {
-      _yv += 0.2;
-      _jumping = true;
+    var currentVelocity = _player.rigidBody.getLinearVelocity();
+    var x = currentVelocity.x();
+    var y = currentVelocity.y();
+    var z = currentVelocity.z();
+    if (_keyStates[' ']) {
+      y += 1.0;
     }
     if (_keyStates['w']) {
-      _xa -= cos(_yRot + PI / 2.0) * _moveSpeed * delta;
-      _za -= sin(_yRot + PI / 2.0) * _moveSpeed * delta;
+      x += cos(_yRot - PI / 2.0) * cos(_xRot);
+      z += sin(_yRot - PI / 2.0) * cos(_xRot);
     }
     if (_keyStates['s']) {
-      _xa += cos(_yRot + PI / 2.0) * _moveSpeed * delta;
-      _za += sin(_yRot + PI / 2.0) * _moveSpeed * delta;
+      x -= cos(_yRot - PI / 2.0) * cos(_xRot);
+      z -= sin(_yRot - PI / 2.0) * cos(_xRot);
     }
-    if (_keyStates['a']) {
-      _xa -= cos(_yRot) * _moveSpeed * delta;
-      _za -= sin(_yRot) * _moveSpeed * delta;
-    }
-    if (_keyStates['d']) {
-      _xa += cos(_yRot) * _moveSpeed * delta;
-      _za += sin(_yRot) * _moveSpeed * delta;
-    }
+    if (x < -2.0) x = -2.0; if (x > 2.0) x = 2.0;
+    if (y < -2.0) y = -2.0; if (y > 2.0) y = 2.0;
+    if (z < -2.0) z = -2.0; if (z > 2.0) z = 2.0;
+    if (x != 0 || y != 0 || z != 0)
+      _player.rigidBody.setLinearVelocity(new ammo.Vector3(x, y, z));
     for (var mouseMovement in _mouseBuffer) {
       var normalisedVerticalDirectionScalar = mouseMovement.verticalDirection == _VerticalMouseMovementDirection.Up ? -1 : 1;
       _xRot += _rotateSpeed * delta * mouseMovement.verticalDistance * normalisedVerticalDirectionScalar;
@@ -399,7 +397,7 @@ class Demo {
       var xVel = cos(_yRot - PI / 2.0) * cos(_xRot);
       var yVel = sin(_xRot);
       var zVel = sin(_yRot - PI / 2.0) * cos(_xRot);
-      _addSphere(xVel: xVel*10.0, yVel: -yVel*10.0, zVel: zVel*10.0);
+      _addSphere(xVel: xVel * 10.0, yVel: -yVel * 10.0, zVel: zVel * 10.0);
     });
     window.onResize.listen((ev) => _gameContext.correctCanvasProportions());
     window.requestAnimationFrame(await _process);
