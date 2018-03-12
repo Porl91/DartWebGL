@@ -19,11 +19,13 @@ class Chunk {
   ModelInfo get model => _floorModelInfo;
 
   Chunk._internal(
-    GameContext gameContext, 
-    this._floorTextureInfo, 
-    this.x, this.z, 
-    this.width, this.depth, 
-    double getHeightForPoint(double x, double z)) {
+      GameContext gameContext,
+      this._floorTextureInfo,
+      this.x,
+      this.z,
+      this.width,
+      this.depth,
+      double getHeightForPoint(double x, double z)) {
     var vertexComponents = <double>[];
     var indices = <int>[];
     var textureCoords = <double>[];
@@ -35,53 +37,80 @@ class Chunk {
         var y2 = getHeightForPoint(xx + 1, zz + 1);
         var y3 = getHeightForPoint(xx + 1, zz);
         vertexComponents.addAll([
-          xx, y0, zz,
-          xx, y1, zz + 1.0, 
-          xx + 1.0, y2, zz + 1.0, 
-          xx + 1.0, y3, zz 
+          xx,
+          y0,
+          zz,
+          xx,
+          y1,
+          zz + 1.0,
+          xx + 1.0,
+          y2,
+          zz + 1.0,
+          xx + 1.0,
+          y3,
+          zz
         ]);
       }
     }
 
-    // There are 3 x 4 = 12 floats that define a quadrilateral. Each quad is specified as sets of two triangles. 
-    // Each triangles is defined by 3 vertices. 2 x 3 = 6 indices. 
+    // There are 3 x 4 = 12 floats that define a quadrilateral. Each quad is specified as sets of two triangles.
+    // Each triangles is defined by 3 vertices. 2 x 3 = 6 indices.
     // Every 12 vertex components defined 6 associated indices.
-    if (vertexComponents.length % vertexComponentsPerQuad != 0) 
-      throw new AssertionError('Total vertex component count for chunks must be divisible by $vertexComponentsPerQuad. ${vertexComponents.length} vertex components were created.');
+    if (vertexComponents.length % vertexComponentsPerQuad != 0)
+      throw new AssertionError(
+          'Total vertex component count for chunks must be divisible by $vertexComponentsPerQuad. ${vertexComponents.length} vertex components were created.');
 
     var quadCount = vertexComponents.length / vertexComponentsPerQuad;
     for (var i = 0; i < quadCount; i++) {
       var indexOffset = i * verticesPerQuad;
       indices.addAll([
-        indexOffset + 0, indexOffset + 1, indexOffset + 2,       // First triangle
-        indexOffset + 0, indexOffset + 2, indexOffset + 3        // Second triangle
+        indexOffset + 0, indexOffset + 1, indexOffset + 2, // First triangle
+        indexOffset + 0, indexOffset + 2, indexOffset + 3 // Second triangle
       ]);
       textureCoords.addAll([
-        0.0,  0.0,             // Top left
-        1.0,  0.0,             // Bottom left
-        1.0,  1.0,             // Bottom right
-        0.0,  1.0              // Top right
+        0.0, 0.0, // Top left
+        1.0, 0.0, // Bottom left
+        1.0, 1.0, // Bottom right
+        0.0, 1.0 // Top right
       ]);
       var vertexOffset = i * vertexComponentsPerQuad;
-      var v0 = new Vector3(vertexComponents[vertexOffset + 0], vertexComponents[vertexOffset + 1], vertexComponents[vertexOffset + 2]);
-      var v1 = new Vector3(vertexComponents[vertexOffset + 3], vertexComponents[vertexOffset + 4], vertexComponents[vertexOffset + 5]);
-      var v2 = new Vector3(vertexComponents[vertexOffset + 6], vertexComponents[vertexOffset + 7], vertexComponents[vertexOffset + 8]);
+      var v0 = new Vector3(
+          vertexComponents[vertexOffset + 0],
+          vertexComponents[vertexOffset + 1],
+          vertexComponents[vertexOffset + 2]);
+      var v1 = new Vector3(
+          vertexComponents[vertexOffset + 3],
+          vertexComponents[vertexOffset + 4],
+          vertexComponents[vertexOffset + 5]);
+      var v2 = new Vector3(
+          vertexComponents[vertexOffset + 6],
+          vertexComponents[vertexOffset + 7],
+          vertexComponents[vertexOffset + 8]);
       var edge0 = v1 - v0;
       var edge1 = v2 - v0;
       var normal = edge0.cross(edge1)..normalize();
       normals.addAll([
-        normal.x, normal.y, normal.z, 
-        normal.x, normal.y, normal.z, 
-        normal.x, normal.y, normal.z, 
-        normal.x, normal.y, normal.z
+        normal.x,
+        normal.y,
+        normal.z,
+        normal.x,
+        normal.y,
+        normal.z,
+        normal.x,
+        normal.y,
+        normal.z,
+        normal.x,
+        normal.y,
+        normal.z
       ]);
     }
-    _floorModelInfo = new ModelInfo(gameContext.gl, vertexComponents, textureCoords, normals, indices);
+    _floorModelInfo = new ModelInfo(
+        gameContext.gl, vertexComponents, textureCoords, normals, indices);
   }
 
   // TODO: Cache result
   double getMinimumHeight() {
-    var minHeight = double.MAX_FINITE;
+    var minHeight = double.maxFinite;
     for (var i = 1; i < model.vertices.length; i += 3) {
       if (model.vertices[i] < minHeight) {
         minHeight = model.vertices[i];
@@ -92,7 +121,7 @@ class Chunk {
 
   // TODO: Cache result
   double getMaximumHeight() {
-    var maxHeight = -double.MAX_FINITE;
+    var maxHeight = -double.maxFinite;
     for (var i = 1; i < model.vertices.length; i += 3) {
       if (model.vertices[i] > maxHeight) {
         maxHeight = model.vertices[i];
@@ -116,11 +145,15 @@ class Chunk {
   }
 
   static Future<Chunk> createFromFunc(
-    GameContext gameContext, 
-    double x, double z, 
-    double width, double depth, 
-    double getHeightForPoint(double x, double z)) async {
-    var floorTexture = new TextureInfo.fromImage(gameContext.gl, await gameContext.loadImage('asset/resources.png'));
-    return new Chunk._internal(gameContext, floorTexture, x, z, width, depth, getHeightForPoint);
+      GameContext gameContext,
+      double x,
+      double z,
+      double width,
+      double depth,
+      double getHeightForPoint(double x, double z)) async {
+    var floorTexture = new TextureInfo.fromImage(
+        gameContext.gl, await gameContext.loadImage('asset/resources.png'));
+    return new Chunk._internal(
+        gameContext, floorTexture, x, z, width, depth, getHeightForPoint);
   }
 }

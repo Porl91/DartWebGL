@@ -13,11 +13,11 @@ class SphereModel {
     final normals = <double>[];
     final indices = <int>[];
     for (var lat = 0; lat <= _maxLatitudinalBands; lat++) {
-      var theta = lat * PI / _maxLatitudinalBands.toDouble();
+      var theta = lat * pi / _maxLatitudinalBands.toDouble();
       var sinTheta = sin(theta);
       var cosTheta = cos(theta);
       for (var lon = 0; lon <= _maxLongitudinalBands; lon++) {
-        var phi = lon * 2.0 * PI / _maxLongitudinalBands;
+        var phi = lon * 2.0 * pi / _maxLongitudinalBands;
         var sinPhi = sin(phi);
         var cosPhi = cos(phi);
         var x = cosPhi * sinTheta;
