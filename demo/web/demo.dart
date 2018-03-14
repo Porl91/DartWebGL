@@ -5,6 +5,7 @@ import 'dart:math';
 import 'dart:web_gl';
 import 'game_context.dart';
 import 'game_object.dart';
+import 'model_info.dart';
 import 'program_builder.dart';
 import 'program_info.dart';
 
@@ -18,6 +19,7 @@ class Demo {
   final GameContext _gameContext;
   final Map<double, Chunk> _chunks = {};
   SphereModel _sphereModel;
+  ModelInfo _appleModel;
   ProgramInfo _programInfo;
 
   final SimplexNoise _noise;
@@ -203,6 +205,56 @@ class Demo {
         in _gameObjects.where((obj) => obj != _player && obj.model != null)) {
       _renderSphere(obj);
     }
+
+    _renderApple(_appleModel);
+  }
+
+  void _renderApple(ModelInfo appleModel) {
+    _gameContext.gl
+        .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.vertexBuffer);
+    _gameContext.gl.vertexAttribPointer(
+        _programInfo.vertexPosition, 3, RenderingContext.FLOAT, false, 0, 0);
+    _gameContext.gl.enableVertexAttribArray(_programInfo.vertexPosition);
+
+    // _gameContext.gl
+    //     .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.textureBuffer);
+    // _gameContext.gl.vertexAttribPointer(
+    //     _programInfo.textureCoord, 2, RenderingContext.FLOAT, false, 0, 0);
+    // _gameContext.gl.enableVertexAttribArray(_programInfo.textureCoord);
+
+    _gameContext.gl
+        .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.normalsBuffer);
+    _gameContext.gl.vertexAttribPointer(
+        _programInfo.normal, 3, RenderingContext.FLOAT, false, 0, 0);
+    _gameContext.gl.enableVertexAttribArray(_programInfo.normal);
+
+    _gameContext.gl.bindBuffer(
+        RenderingContext.ELEMENT_ARRAY_BUFFER, appleModel.indexBuffer);
+    _gameContext.gl.useProgram(_programInfo.program);
+
+    var playerPosition = _getPositionForRigidBody(_player.rigidBody);
+
+    var modelMatrix = new Matrix4.compose(new vec.Vector3(0.0, 0.0, 0.0),
+        new vec.Quaternion(0.0, 0.0, 0.0, 0.0), new vec.Vector3(1.0, 1.0, 1.0));
+    var modelViewMatrix = new Matrix4.identity()
+      ..rotateX(_xRot)
+      ..rotateY(_yRot)
+      ..translate(-playerPosition.x(), -playerPosition.y(), -playerPosition.z())
+      ..multiply(modelMatrix);
+
+    var normalsMatrix = modelMatrix
+      ..invert()
+      ..transpose();
+
+    _gameContext.gl.uniformMatrix4fv(
+        _programInfo.projectionMatrix, false, _projectionMatrix.storage);
+    _gameContext.gl.uniformMatrix4fv(
+        _programInfo.modelViewMatrix, false, modelViewMatrix.storage);
+    _gameContext.gl.uniformMatrix4fv(
+        _programInfo.normalsMatrix, false, normalsMatrix.storage);
+
+    _gameContext.gl.drawElements(RenderingContext.TRIANGLES,
+        appleModel.indices.length, RenderingContext.UNSIGNED_SHORT, 0);
   }
 
   void _renderSphere(GameObject gameObject) {
@@ -418,7 +470,16 @@ class Demo {
           _gameContext.gl.getUniformLocation(program, 'uSampler'));
     } catch (e) {
       // 'e' is a ProgressEvent, not Error -- https://github.com/dart-lang/api.dartlang.org/issues/29.
-      final error = 'Failed to load shader source files.';
+      final error = 'Failed to load shader source files.\n${e.toString()}';
+      window.console.error(error);
+      return new Future<String>.error(error);
+    }
+
+    try {
+      _appleModel = await ModelInfo.createFromWavefrontObjFile(
+          _gameContext.gl, 'asset/models/apple/data.obj');
+    } catch (e) {
+      final error = 'Failed to load model.\n${e.toString()}';
       window.console.error(error);
       return new Future<String>.error(error);
     }

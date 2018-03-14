@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:html';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:web_gl' as GL;
 
@@ -12,11 +15,12 @@ class ModelInfo {
   GL.Buffer _normalsBuffer;
   GL.Buffer _indexBuffer;
 
-  ModelInfo(GL.RenderingContext gl, 
-    List<double> vertices, 
-    List<double> textureCoordinates, 
-    List<double> normals, 
-    List<int> indices) {
+  ModelInfo._internal(
+      GL.RenderingContext gl,
+      List<double> vertices,
+      List<double> textureCoordinates,
+      List<double> normals,
+      List<int> indices) {
     _vertices = new Float32List.fromList(vertices);
     _textureCoordinates = new Float32List.fromList(textureCoordinates);
     _normals = new Float32List.fromList(normals);
@@ -38,6 +42,74 @@ class ModelInfo {
 
     gl.bindBuffer(GL.ELEMENT_ARRAY_BUFFER, _indexBuffer);
     gl.bufferData(GL.ELEMENT_ARRAY_BUFFER, _indices, GL.STATIC_DRAW);
+  }
+
+  factory ModelInfo(
+          GL.RenderingContext gl,
+          List<double> vertices,
+          List<double> textureCoordinates,
+          List<double> normals,
+          List<int> indices) =>
+      new ModelInfo._internal(
+          gl, vertices, textureCoordinates, normals, indices);
+
+  static Future<ModelInfo> createFromWavefrontObjFile(
+      GL.RenderingContext gl, String filename) async {
+    try {
+      var lines = (await HttpRequest.getString(filename)).split('\n');
+      var vertices = <double>[];
+      var textureCoordinates = <double>[];
+      var normals = <double>[];
+      var indices = <int>[];
+      var x = 0;
+      for (var line in lines) {
+        if (line.startsWith('v '))
+          vertices.addAll(line
+              .substring(2)
+              .trim()
+              .split(' ')
+              .map((component) => double.parse(component.trim())));
+        else if (line.startsWith('vt '))
+          textureCoordinates.addAll(line
+              .substring(3)
+              .trim()
+              .split(' ')
+              .take(2)
+              .map((component) => double.parse(component.trim())));
+        else if (line.startsWith('vn '))
+          normals.addAll(line
+              .substring(3)
+              .trim()
+              .split(' ')
+              .map((component) => double.parse(component.trim())));
+        else if (line.startsWith('f ')) {
+          var points = line.substring(2).trim().split(' ');
+          if (points.length >= 3) {
+            x++;
+            var index1 = int.parse(points[0].split('/').first) - 1;
+            var index2 = int.parse(points[1].split('/').first) - 1;
+            var index3 = int.parse(points[2].split('/').first) - 1;
+            if (points.length == 4) {
+              var index4 = int.parse(points[3].split('/').first) - 1;
+              indices.addAll([index1, index2, index3, index1, index3, index4]);
+            } else if (points.length == 3) {
+              indices.addAll([index1, index2, index3]);
+            } else {
+              window.console.log(line);
+            }
+          }
+        }
+      }
+      window.console.log(vertices.length);
+      window.console.log(x);
+      window.console.log(indices.length);
+      window.console.log(indices.reduce(max));
+      return new ModelInfo._internal(
+          gl, vertices, textureCoordinates, normals, indices);
+    } catch (e) {
+      return new Future<ModelInfo>.error(
+          'Failed to load model: $filename\n ${e.toString()}');
+    }
   }
 
   Float32List get vertices => _vertices;
