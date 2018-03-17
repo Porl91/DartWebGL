@@ -1,13 +1,13 @@
 import 'dart:math';
 import 'dart:web_gl';
-import 'model_info.dart';
+import 'models/mesh.dart';
 
-class SphereModel {
+class SphereMesh {
   static const int _maxLatitudinalBands = 30;
   static const int _maxLongitudinalBands = 30;
   final double _radius;
-  ModelInfo _model;
-  SphereModel.fromRadius(RenderingContext gl, this._radius) {
+  Mesh _mesh;
+  SphereMesh.fromRadius(RenderingContext gl, this._radius) {
     final vertices = <double>[];
     final textureCoordinates = <double>[]; // TODO
     final normals = <double>[];
@@ -34,20 +34,12 @@ class SphereModel {
       for (var lon = 0; lon < _maxLongitudinalBands; lon++) {
         var first = lat * (_maxLongitudinalBands + 1) + lon;
         var second = first + _maxLongitudinalBands + 1;
-        indices.addAll([
-          first, second, first + 1, 
-          second, second + 1, first + 1
-        ]);
+        indices
+            .addAll([first, second, first + 1, second, second + 1, first + 1]);
       }
     }
-    _model = new ModelInfo(
-      gl, 
-      vertices,
-      textureCoordinates, 
-      normals,
-      indices
-    );
+    _mesh = new Mesh(gl, vertices, textureCoordinates, normals, indices);
   }
   double get radius => _radius;
-  ModelInfo get model => _model;
+  Mesh get mesh => _mesh;
 }

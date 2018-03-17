@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'dart:html';
-import 'dart:math';
 import 'dart:typed_data';
 import 'dart:web_gl' as GL;
 
-class ModelInfo {
+class Mesh {
   Float32List _vertices;
   Float32List _textureCoordinates;
   Float32List _normals;
@@ -15,7 +14,7 @@ class ModelInfo {
   GL.Buffer _normalsBuffer;
   GL.Buffer _indexBuffer;
 
-  ModelInfo._internal(
+  Mesh._internal(
       GL.RenderingContext gl,
       List<double> vertices,
       List<double> textureCoordinates,
@@ -44,24 +43,22 @@ class ModelInfo {
     gl.bufferData(GL.ELEMENT_ARRAY_BUFFER, _indices, GL.STATIC_DRAW);
   }
 
-  factory ModelInfo(
+  factory Mesh(
           GL.RenderingContext gl,
           List<double> vertices,
           List<double> textureCoordinates,
           List<double> normals,
           List<int> indices) =>
-      new ModelInfo._internal(
-          gl, vertices, textureCoordinates, normals, indices);
+      new Mesh._internal(gl, vertices, textureCoordinates, normals, indices);
 
-  static Future<ModelInfo> createFromWavefrontObjFile(
+  static Future<Mesh> createFromWavefrontObjFile(
       GL.RenderingContext gl, String filename) async {
     try {
       var lines = (await HttpRequest.getString(filename)).split('\n');
       var vertices = <double>[];
       var textureCoordinates = <double>[];
       var normals = <double>[];
-      var indices = <int>[];
-      var x = 0;
+      var meshData = new _PackedMeshData();
       for (var line in lines) {
         if (line.startsWith('v '))
           vertices.addAll(line
@@ -82,33 +79,62 @@ class ModelInfo {
               .trim()
               .split(' ')
               .map((component) => double.parse(component.trim())));
-        else if (line.startsWith('f ')) {
-          var points = line.substring(2).trim().split(' ');
-          if (points.length >= 3) {
-            x++;
-            var index1 = int.parse(points[0].split('/').first) - 1;
-            var index2 = int.parse(points[1].split('/').first) - 1;
-            var index3 = int.parse(points[2].split('/').first) - 1;
-            if (points.length == 4) {
-              var index4 = int.parse(points[3].split('/').first) - 1;
-              indices.addAll([index1, index2, index3, index1, index3, index4]);
-            } else if (points.length == 3) {
-              indices.addAll([index1, index2, index3]);
-            } else {
-              window.console.log(line);
-            }
-          }
-        }
+        else if (line.startsWith('f '))
+          // vertices, textureCoordinates & normals will be pre-populated by this point as faces come after them in .obj files.
+          // A second pass can be avoided.
+          loadMeshDataFromFileLine(
+              meshData, line, vertices, textureCoordinates, normals);
       }
-      window.console.log(vertices.length);
-      window.console.log(x);
-      window.console.log(indices.length);
-      window.console.log(indices.reduce(max));
-      return new ModelInfo._internal(
-          gl, vertices, textureCoordinates, normals, indices);
+      return new Mesh._internal(gl, meshData.vertices,
+          meshData.textureCoordinates, meshData.normals, meshData.indices);
     } catch (e) {
-      return new Future<ModelInfo>.error(
+      return new Future<Mesh>.error(
           'Failed to load model: $filename\n ${e.toString()}');
+    }
+  }
+
+  static void loadMeshDataFromFileLine(
+      _PackedMeshData meshData,
+      String line,
+      List<double> vertices,
+      List<double> textureCoordinates,
+      List<double> normals) {
+    var dataRow = line.substring(2).trim();
+    var segments = dataRow.split(' ');
+    var quad = false;
+    for (var i = 0; i < segments.length; i++) {
+      if (i == 3 && !quad) {
+        i = 2;
+        quad = true;
+      }
+      if (meshData.cachedIndices.containsKey(segments[i])) {
+        meshData.indices.add(meshData.cachedIndices[segments[i]]);
+      } else {
+        var indices = segments[i]
+            .split('/')
+            .map((index) => int.parse(index.trim()))
+            .toList();
+        // Vertices
+        meshData.vertices.addAll([vertices[(indices[0] - 1) * 3 + 0]]);
+        meshData.vertices.addAll([vertices[(indices[0] - 1) * 3 + 1]]);
+        meshData.vertices.addAll([vertices[(indices[0] - 1) * 3 + 2]]);
+        // Texture coordinates
+        meshData.textureCoordinates
+            .addAll([textureCoordinates[(indices[1] - 1) * 2 + 0]]);
+        meshData.textureCoordinates
+            .addAll([textureCoordinates[(indices[1] - 1) * 2 + 1]]);
+        // Surface normals
+        meshData.normals.addAll([normals[(indices[2] - 1) * 3 + 0]]);
+        meshData.normals.addAll([normals[(indices[2] - 1) * 3 + 1]]);
+        meshData.normals.addAll([normals[(indices[2] - 1) * 3 + 2]]);
+        // Indices
+        meshData.cachedIndices.putIfAbsent(segments[i], () => meshData.index);
+        meshData.indices.add(meshData.index);
+        meshData.index++;
+      }
+      if (i == 3 && quad) {
+        meshData.indices.add(meshData.cachedIndices[segments[0]]);
+      }
     }
   }
 
@@ -121,4 +147,19 @@ class ModelInfo {
   GL.Buffer get textureBuffer => _textureBuffer;
   GL.Buffer get normalsBuffer => _normalsBuffer;
   GL.Buffer get indexBuffer => _indexBuffer;
+}
+
+class _PackedMeshData {
+  final List<double> vertices;
+  final List<double> normals;
+  final List<double> textureCoordinates;
+  final List<int> indices;
+  final Map<String, int> cachedIndices;
+  int index = 0;
+  _PackedMeshData()
+      : vertices = [],
+        normals = [],
+        textureCoordinates = [],
+        indices = [],
+        cachedIndices = {};
 }

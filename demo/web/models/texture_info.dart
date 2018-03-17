@@ -8,6 +8,8 @@ class TextureInfo {
   TextureInfo.fromImage(GL.RenderingContext gl, ImageElement image) {
     var texture = gl.createTexture();
     gl.bindTexture(GL.TEXTURE_2D, texture);
+    // TODO: Add parameter for this
+    gl.pixelStorei(GL.UNPACK_FLIP_Y_WEBGL, 1);
     gl.texImage2D(GL.TEXTURE_2D, 0, GL.RGBA, GL.RGBA, GL.UNSIGNED_BYTE, image);
 
     if (numberIsPowerOf2(image.width) && numberIsPowerOf2(image.height)) {

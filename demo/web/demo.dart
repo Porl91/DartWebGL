@@ -5,7 +5,7 @@ import 'dart:math';
 import 'dart:web_gl';
 import 'game_context.dart';
 import 'game_object.dart';
-import 'model_info.dart';
+import 'models/mesh.dart';
 import 'program_builder.dart';
 import 'program_info.dart';
 
@@ -13,13 +13,14 @@ import 'package:dart_ammo_js/dart_ammo_js.dart';
 import 'package:dart_ammo_js/dart_ammo_js.dart' as ammo;
 import 'package:vector_math/vector_math.dart';
 import 'package:vector_math/vector_math.dart' as vec;
-import 'sphere_model.dart';
+import 'sphere_mesh.dart';
+import 'models/texture_info.dart';
 
 class Demo {
   final GameContext _gameContext;
   final Map<double, Chunk> _chunks = {};
-  SphereModel _sphereModel;
-  ModelInfo _appleModel;
+  SphereMesh _sphereMesh;
+  Mesh _appleMesh;
   ProgramInfo _programInfo;
 
   final SimplexNoise _noise;
@@ -49,6 +50,8 @@ class Demo {
   DiscreteDynamicsWorld _dynamicsWorld;
   final List<GameObject> _gameObjects = [];
   GameObject _player;
+
+  TextureInfo _appleTexture;
 
   Demo(this._gameContext)
       : _noise = new SimplexNoise(
@@ -95,7 +98,7 @@ class Demo {
         ? new ammo.Vector3(0.0, 0.0, 0.0)
         : _getPositionForRigidBody(_player.rigidBody);
     const double sphereMass = 1.0;
-    var sphereShape = new SphereShape(_sphereModel.radius);
+    var sphereShape = new SphereShape(_sphereMesh.radius);
     var startTransform = new Transform();
     startTransform.setIdentity();
     var localInertia = new ammo.Vector3(0.0, 0.0, 0.0);
@@ -105,7 +108,7 @@ class Demo {
         playerPosition.x() +
             cos(_yRot - pi / 2.0) * cos(_xRot) * placementDistance;
     var ySphere = (y ?? playerPosition.y() - sin(_xRot) * placementDistance) +
-        _sphereModel.radius;
+        _sphereMesh.radius;
     var zSphere = z ??
         playerPosition.z() +
             sin(_yRot - pi / 2.0) * cos(_xRot) * placementDistance;
@@ -117,7 +120,7 @@ class Demo {
     rigidBody.setSleepingThresholds(0.0, 0.0);
     rigidBody.setLinearVelocity(new ammo.Vector3(xVel, yVel, zVel));
     _dynamicsWorld.addRigidBody(rigidBody);
-    _gameObjects.add(new GameObject(_sphereModel.model, rigidBody));
+    _gameObjects.add(new GameObject(_sphereMesh.mesh, rigidBody));
   }
 
   void _cleanupAmmo() {
@@ -202,25 +205,28 @@ class Demo {
     }
 
     for (var obj
-        in _gameObjects.where((obj) => obj != _player && obj.model != null)) {
+        in _gameObjects.where((obj) => obj != _player && obj.mesh != null)) {
       _renderSphere(obj);
     }
 
-    _renderApple(_appleModel);
+    _renderApple(_appleMesh);
   }
 
-  void _renderApple(ModelInfo appleModel) {
+  void _renderApple(Mesh appleModel) {
+    _gameContext.gl
+        .bindTexture(RenderingContext.TEXTURE_2D, _appleTexture.texture);
+
     _gameContext.gl
         .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.vertexBuffer);
     _gameContext.gl.vertexAttribPointer(
         _programInfo.vertexPosition, 3, RenderingContext.FLOAT, false, 0, 0);
     _gameContext.gl.enableVertexAttribArray(_programInfo.vertexPosition);
 
-    // _gameContext.gl
-    //     .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.textureBuffer);
-    // _gameContext.gl.vertexAttribPointer(
-    //     _programInfo.textureCoord, 2, RenderingContext.FLOAT, false, 0, 0);
-    // _gameContext.gl.enableVertexAttribArray(_programInfo.textureCoord);
+    _gameContext.gl
+        .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.textureBuffer);
+    _gameContext.gl.vertexAttribPointer(
+        _programInfo.textureCoord, 2, RenderingContext.FLOAT, false, 0, 0);
+    _gameContext.gl.enableVertexAttribArray(_programInfo.textureCoord);
 
     _gameContext.gl
         .bindBuffer(RenderingContext.ARRAY_BUFFER, appleModel.normalsBuffer);
@@ -259,19 +265,19 @@ class Demo {
 
   void _renderSphere(GameObject gameObject) {
     _gameContext.gl.bindBuffer(
-        RenderingContext.ARRAY_BUFFER, _sphereModel.model.vertexBuffer);
+        RenderingContext.ARRAY_BUFFER, _sphereMesh.mesh.vertexBuffer);
     _gameContext.gl.vertexAttribPointer(
         _programInfo.vertexPosition, 3, RenderingContext.FLOAT, false, 0, 0);
     _gameContext.gl.enableVertexAttribArray(_programInfo.vertexPosition);
 
     _gameContext.gl.bindBuffer(
-        RenderingContext.ARRAY_BUFFER, _sphereModel.model.normalsBuffer);
+        RenderingContext.ARRAY_BUFFER, _sphereMesh.mesh.normalsBuffer);
     _gameContext.gl.vertexAttribPointer(
         _programInfo.normal, 3, RenderingContext.FLOAT, false, 0, 0);
     _gameContext.gl.enableVertexAttribArray(_programInfo.normal);
 
     _gameContext.gl.bindBuffer(
-        RenderingContext.ELEMENT_ARRAY_BUFFER, _sphereModel.model.indexBuffer);
+        RenderingContext.ELEMENT_ARRAY_BUFFER, _sphereMesh.mesh.indexBuffer);
     _gameContext.gl.useProgram(_programInfo.program);
 
     var modelTransform = new Transform();
@@ -307,7 +313,7 @@ class Demo {
         _programInfo.normalsMatrix, false, normalsMatrix.storage);
 
     _gameContext.gl.drawElements(RenderingContext.TRIANGLES,
-        _sphereModel.model.indices.length, RenderingContext.UNSIGNED_SHORT, 0);
+        _sphereMesh.mesh.indices.length, RenderingContext.UNSIGNED_SHORT, 0);
   }
 
   static ammo.Vector3 _getPositionForRigidBody(RigidBody rigidBody) {
@@ -476,8 +482,14 @@ class Demo {
     }
 
     try {
-      _appleModel = await ModelInfo.createFromWavefrontObjFile(
+      _appleMesh = await Mesh.createFromWavefrontObjFile(
           _gameContext.gl, 'asset/models/apple/data.obj');
+      window.console.log(
+          '${_appleMesh.textureCoordinates.length} -- ${_appleMesh.indices.length}');
+      _appleTexture = new TextureInfo.fromImage(
+          _gameContext.gl,
+          await _gameContext
+              .loadImage('asset/models/apple/textures/appleD.jpg'));
     } catch (e) {
       final error = 'Failed to load model.\n${e.toString()}';
       window.console.error(error);
@@ -486,7 +498,7 @@ class Demo {
 
     _projectionMatrix = makePerspectiveMatrix(
         fovRadians, _gameContext.getCanvasAspectRatio(), 0.1, 1000.0);
-    _sphereModel = new SphereModel.fromRadius(_gameContext.gl, 2.0);
+    _sphereMesh = new SphereMesh.fromRadius(_gameContext.gl, 2.0);
     _initialiseAmmo();
   }
 

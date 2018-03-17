@@ -1,22 +1,22 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'game_context.dart';
-import 'model_info.dart';
+import 'models/mesh.dart';
 import 'package:vector_math/vector_math.dart';
-import 'texture_info.dart';
+import 'models/texture_info.dart';
 
 class Chunk {
   final double x, z;
   final double width, depth;
   final TextureInfo _floorTextureInfo;
-  ModelInfo _floorModelInfo;
+  Mesh _floorMesh;
 
   static const componentsPerVertex = 3;
   static const verticesPerQuad = 4;
   static const vertexComponentsPerQuad = verticesPerQuad * componentsPerVertex;
 
   TextureInfo get texture => _floorTextureInfo;
-  ModelInfo get model => _floorModelInfo;
+  Mesh get mesh => _floorMesh;
 
   Chunk._internal(
       GameContext gameContext,
@@ -104,16 +104,16 @@ class Chunk {
         normal.z
       ]);
     }
-    _floorModelInfo = new ModelInfo(
+    _floorMesh = new Mesh(
         gameContext.gl, vertexComponents, textureCoords, normals, indices);
   }
 
   // TODO: Cache result
   double getMinimumHeight() {
     var minHeight = double.maxFinite;
-    for (var i = 1; i < model.vertices.length; i += 3) {
-      if (model.vertices[i] < minHeight) {
-        minHeight = model.vertices[i];
+    for (var i = 1; i < mesh.vertices.length; i += 3) {
+      if (mesh.vertices[i] < minHeight) {
+        minHeight = mesh.vertices[i];
       }
     }
     return minHeight;
@@ -122,9 +122,9 @@ class Chunk {
   // TODO: Cache result
   double getMaximumHeight() {
     var maxHeight = -double.maxFinite;
-    for (var i = 1; i < model.vertices.length; i += 3) {
-      if (model.vertices[i] > maxHeight) {
-        maxHeight = model.vertices[i];
+    for (var i = 1; i < mesh.vertices.length; i += 3) {
+      if (mesh.vertices[i] > maxHeight) {
+        maxHeight = mesh.vertices[i];
       }
     }
     return maxHeight;
@@ -133,13 +133,13 @@ class Chunk {
   Float32List getTerrainHeightData() {
     var data = new Float32List(((width + 1) * (depth + 1)).toInt());
     // For every quad's worth of vertices the only component that's required to produce a height map is the Y component of the top-left vertex.
-    for (var i = 0; i < model.vertices.length; i += vertexComponentsPerQuad) {
+    for (var i = 0; i < mesh.vertices.length; i += vertexComponentsPerQuad) {
       var index = i ~/ vertexComponentsPerQuad;
       // TODO: Figure out why the X and Z components are flipped in the vertex array *or* why Bullet is reading the height data array in this order.
       var zz = index / width;
       var xx = index % width;
       var flippedIndex = (xx * width + zz).toInt();
-      data[flippedIndex] = model.vertices[i + 1];
+      data[flippedIndex] = mesh.vertices[i + 1];
     }
     return data;
   }
